@@ -76,6 +76,12 @@ html, body, body * {
   font-family: "Times New Roman", Times, serif !important;
   font-size: 14px !important;
 }
+.info-grid{display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px}
+.info-grid label{font-weight:900;color:var(--navy)}
+.info-grid input{width:100%;padding:12px;border:1px solid var(--line);border-radius:12px;margin-top:6px;font:inherit}
+.info-ok{margin-top:10px;font-weight:800;color:#1f8a4c}.info-need{margin-top:10px;font-weight:800;color:#c0552b}
+@media(max-width:560px){.info-grid{grid-template-columns:1fr 1fr}.info-grid .info-school{grid-column:1/-1}}
+.finish-score{font-size:22px;font-weight:900;color:var(--navy);margin:8px 0 14px}
 </style>
 </head>
 <body>
@@ -93,6 +99,17 @@ html, body, body * {
   <h1>EM BIẾT BẢO VỆ MÌNH!</h1>
   <p>Cùng quan sát, nhận diện nguy cơ và lựa chọn cách ứng phó an toàn trong những tình huống gần gũi với cuộc sống hằng ngày.</p>
   <div class="hero-tags"><span>⭐ 45 tình huống</span><span>🎯 5 chủ đề</span><span>🌱 3 mức độ</span><span>💻 Học tập tương tác</span></div>
+</section>
+
+<section class="panel" id="studentInfoPanel">
+  <h2 style="margin:0;color:var(--navy)">🙋 Thông tin của em</h2>
+  <p style="margin:5px 0 12px;color:var(--muted)">Em ghi trường, lớp và số thứ tự của em trong lớp (<b>không ghi họ tên</b>) để cô biết em đã luyện tập nhé.</p>
+  <div class="info-grid">
+    <div class="info-school"><label for="infoSchool">Trường</label><input id="infoSchool" autocomplete="off" placeholder="VD: TH Phan Chu Trinh"></div>
+    <div><label for="infoClass">Lớp</label><input id="infoClass" autocomplete="off" placeholder="VD: 3/14"></div>
+    <div><label for="infoStt">Số thứ tự</label><input id="infoStt" type="number" min="1" max="99" inputmode="numeric" placeholder="VD: 7"></div>
+  </div>
+  <div id="infoStatus" class="info-need">✏️ Em điền đủ 3 ô rồi chọn chủ đề nhé.</div>
 </section>
 
 <div class="section-head">
@@ -219,6 +236,16 @@ html, body, body * {
   <p class="image-help" style="margin-top:12px">Mã PIN dùng để ngăn học sinh truy cập nhầm vào khu vực chỉnh sửa trên giao diện phần mềm.</p>
  </div>
 </div>
+<div class="modal hidden" id="finishModal">
+ <div class="modal-box" style="text-align:center">
+  <h2>🎉 Em đã làm xong nhóm tình huống!</h2>
+  <div id="finishTopic" style="color:var(--muted);font-weight:800"></div>
+  <div class="finish-score" id="finishScore"></div>
+  <p id="finishHint" style="color:var(--muted)">Em bấm nút dưới đây, rồi bấm <b>GỬI</b> ở cuối trang phiếu để cô nhận được kết quả nhé!</p>
+  <button class="btn primary" id="sendResultBtn" style="width:100%" onclick="sendResult()">📨 Gửi kết quả cho cô</button>
+  <button class="btn secondary" style="width:100%;margin-top:10px" onclick="closeFinish()">← Về chọn chủ đề</button>
+ </div>
+</div>
 <div class="modal hidden" id="assessmentModal">
  <div class="modal-box">
   <div class="row space"><h2>📝 Phiếu đánh giá kỹ năng</h2><button class="pill" onclick="closeAssessment()">✕ Đóng</button></div>
@@ -262,6 +289,21 @@ function tryFolderImage(paths){return new Promise(resolve=>{let i=0;function nex
 async function setScenarioImage(s){let uploaded=pickImage(scenarioKey(s.id)),photo=$("scenePhoto"),emoji=$("sceneEmoji"),art=$("sceneArt");if(uploaded){photo.src=uploaded;photo.classList.remove("hidden");emoji.classList.add("hidden");art.classList.add("has-photo");return;}let path=await tryFolderImage(folderCandidates("scenario",s.id));if(path){photo.src=path;photo.classList.remove("hidden");emoji.classList.add("hidden");art.classList.add("has-photo");}else{photo.classList.add("hidden");photo.removeAttribute("src");emoji.classList.remove("hidden");art.classList.remove("has-photo");}}
 
 const $=id=>document.getElementById(id);
+// v2.5: thông tin HS (trường, lớp, số thứ tự — không họ tên) + gửi kết quả qua Google Form của cô.
+const FORM_LINK="https://docs.google.com/forms/d/e/1FAIpQLSf4iC93drOgmZIuKw2t8fPDAoga06HJiNKjQjCe8ISSWvYn8w/viewform?usp=pp_url&entry.1152571522=__TRUONG__&entry.1401035081=__LOP__&entry.1581912759=__STT__&entry.1359289252=__CHUDE__&entry.1744851031=__MUCDO__&entry.991496955=__KETQUA__";
+let runResults={};
+function lsGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
+function lsSet(k,v){try{localStorage.setItem(k,v);}catch(e){}}
+function normClass(v){return String(v||"").trim().toUpperCase().replace(/\s+/g,"").replace(/[.,_-]/g,"/");}
+function readStudentInfo(){let school=$("infoSchool").value.trim().replace(/\s+/g," "),cls=normClass($("infoClass").value),stt=parseInt($("infoStt").value,10);return {school,cls,stt:(stt>=1&&stt<=99)?stt:null};}
+function infoValid(i){return !!(i.school&&i.cls&&i.stt);}
+function refreshInfoStatus(){let i=readStudentInfo(),el=$("infoStatus");lsSet("ebv_student",JSON.stringify(i));if(infoValid(i)){el.className="info-ok";el.textContent=`✅ ${i.school} · Lớp ${i.cls} · Số thứ tự ${i.stt}`;}else{el.className="info-need";el.textContent="✏️ Em điền đủ 3 ô rồi chọn chủ đề nhé.";}}
+function initStudentInfo(){let i={};try{i=JSON.parse(lsGet("ebv_student")||"{}")||{};}catch(e){}$("infoSchool").value=i.school||"";$("infoClass").value=i.cls||"";$("infoStt").value=i.stt||"";["infoSchool","infoClass","infoStt"].forEach(id=>$(id).addEventListener("input",refreshInfoStatus));$("infoClass").addEventListener("blur",()=>{$("infoClass").value=normClass($("infoClass").value);refreshInfoStatus();});refreshInfoStatus();}
+function needInfo(){if(mode==="teacher")return false;if(infoValid(readStudentInfo()))return false;toast("Em ghi trường, lớp và số thứ tự trước nhé!");$("studentInfoPanel").scrollIntoView({behavior:"smooth",block:"center"});let i=readStudentInfo();setTimeout(()=>$(!i.school?"infoSchool":!i.cls?"infoClass":"infoStt").focus(),400);return true;}
+function showFinish(){let ids=currentList.map(s=>s.id),ok=ids.filter(id=>runResults[id]===true).length,done=ids.filter(id=>runResults[id]!==undefined).length;$("finishTopic").textContent=`${CATS[selectedCategory].name} · ${LEVELS[selectedLevel]}`;$("finishScore").textContent=`Chọn đúng ngay: ${ok}/${ids.length} tình huống`+(done<ids.length?` (đã làm ${done})`:"");let student=mode!=="teacher";$("sendResultBtn").classList.toggle("hidden",!student);$("finishHint").classList.toggle("hidden",!student);$("finishModal").classList.remove("hidden");$("finishModal").dataset.result=`${ok}/${ids.length}`;}
+function closeFinish(){$("finishModal").classList.add("hidden");backToTopics();}
+function sendResult(){if(!FORM_LINK){toast("Cô chưa gắn phiếu nhận kết quả. Em báo cô nhé!");return;}let i=readStudentInfo();if(!infoValid(i)){$("finishModal").classList.add("hidden");needInfo();return;}let v={__TRUONG__:i.school,__LOP__:i.cls,__STT__:String(i.stt),__CHUDE__:CATS[selectedCategory].name,__MUCDO__:LEVELS[selectedLevel],__KETQUA__:$("finishModal").dataset.result||""};let url=FORM_LINK;Object.keys(v).forEach(k=>{url=url.split(k).join(encodeURIComponent(v[k]));});let w=window.open(url,"_blank");if(!w)location.href=url;}
+
 function persist(){localStorage.setItem("ebv_attempts",JSON.stringify(attempts));localStorage.setItem("ebv_assessments",JSON.stringify(assessments));updateCounts();}
 function updateCounts(){$("doneCount").textContent=new Set(attempts.filter(a=>a.correct).map(a=>a.id)).size;$("teacherStats").textContent=`${attempts.length} lượt làm · ${assessments.length} phiếu đánh giá`;}
 function toast(msg){$("toast").textContent=msg;$("toast").classList.remove("hidden");setTimeout(()=>$("toast").classList.add("hidden"),2200);}
@@ -272,7 +314,7 @@ function renderTopics(){
 function selectCategory(id){selectedCategory=id;renderTopics();updateScenarioCount();}
 function selectLevel(n){selectedLevel=n;document.querySelectorAll(".level").forEach(b=>b.classList.toggle("selected",+b.dataset.level===n));updateScenarioCount();}
 function updateScenarioCount(){let n=DATA.filter(s=>s.category===selectedCategory&&s.level===selectedLevel).length;$("scenarioCount").textContent=`${n} tình huống trong chủ đề ${CATS[selectedCategory].name} · ${LEVELS[selectedLevel]}`;}
-function startSelected(){currentList=DATA.filter(s=>s.category===selectedCategory&&s.level===selectedLevel);currentIndex=0;$("playArea").classList.remove("hidden");$("playArea").scrollIntoView({behavior:"smooth",block:"start"});renderScenario();}
+function startSelected(){if(needInfo())return;runResults={};currentList=DATA.filter(s=>s.category===selectedCategory&&s.level===selectedLevel);currentIndex=0;$("playArea").classList.remove("hidden");$("playArea").scrollIntoView({behavior:"smooth",block:"start"});renderScenario();}
 function renderScenario(){
  currentScenario=currentList[currentIndex];answered=false;
  $("scenarioTag").textContent=CATS[currentScenario.category].name.toUpperCase();$("scenarioNumber").textContent=`${currentIndex+1}/${currentList.length}`;
@@ -290,14 +332,14 @@ function chooseAnswer(i){
  currentScenario.choices.forEach((c,j)=>{let el=$("answer"+j);el.disabled=true;if(j===currentScenario.correct)el.classList.add("correct");else if(j===i)el.classList.add("wrong");});
  const fb=$("feedback");fb.classList.remove("hidden");
  fb.innerHTML=`<h3>${good?"🌟 Em đã chọn cách an toàn!":"💛 Mình cùng suy nghĩ lại nhé!"}</h3><p><b>Vì sao?</b> ${currentScenario.feedback}</p><p style="margin-top:8px"><b>Gợi ý luyện tập:</b> ${currentScenario.practice}</p>`;
- attempts.push({id:currentScenario.id,category:currentScenario.category,level:currentScenario.level,choice:i,correct:good,at:new Date().toISOString()});persist();
+ if(runResults[currentScenario.id]===undefined)runResults[currentScenario.id]=good;let si=readStudentInfo();attempts.push({id:currentScenario.id,category:currentScenario.category,level:currentScenario.level,choice:i,correct:good,at:new Date().toISOString(),school:si.school,cls:si.cls,stt:si.stt});persist();
  $("statAttempt").textContent=attempts.length;$("statCorrect").textContent=attempts.filter(a=>a.correct).length;
  $("retryBtn").classList.toggle("hidden",good);$("nextBtn").classList.remove("hidden");
  updateProgress();
 }
 function updateProgress(){let done=attempts.filter(a=>a.category===currentScenario.category&&a.level===currentScenario.level).length;$("progressBar").style.width=Math.min(100,done/3*100)+"%";}
 function retryScenario(){renderScenario();}
-function nextScenario(){if(currentIndex<currentList.length-1){currentIndex++;renderScenario();}else{toast("Em đã hoàn thành nhóm tình huống này!");backToTopics();}}
+function nextScenario(){if(currentIndex<currentList.length-1){currentIndex++;renderScenario();}else{showFinish();}}
 function backToTopics(){$("playArea").classList.add("hidden");window.scrollTo({top:0,behavior:"smooth"});}
 async function hashPin(pin){
   if(window.crypto&&crypto.subtle){let bytes=new TextEncoder().encode(pin),digest=await crypto.subtle.digest("SHA-256",bytes);return Array.from(new Uint8Array(digest)).map(b=>b.toString(16).padStart(2,"0")).join("");}
@@ -352,7 +394,7 @@ function openTeacherAssessment(){if(!requireTeacher())return;$("assessmentModal"
 function closeAssessment(){$("assessmentModal").classList.add("hidden");}
 function saveAssessment(){if(!requireTeacher())return;let values=RUBRIC.map((r,i)=>+$("rubric"+i).value);assessments.push({name:$("studentName").value.trim(),values,at:new Date().toISOString()});persist();closeAssessment();toast("Đã lưu phiếu đánh giá trên thiết bị.");}
 function download(name,content,type){let blob=new Blob([content],{type}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=name;a.click();URL.revokeObjectURL(url);}
-function exportCSV(){if(!requireTeacher())return;let rows=[["Ma tinh huong","Chu de","Muc do","Lua chon","An toan","Thoi gian"],...attempts.map(a=>[a.id,CATS[a.category].name,a.level,a.choice+1,a.correct?"Co":"Khong",a.at])];let csv=rows.map(r=>r.map(v=>'"'+String(v??"").replaceAll('"','""')+'"').join(",")).join("\n");download("du_lieu_luyen_tap_em_biet_bao_ve_minh.csv","\ufeff"+csv,"text/csv;charset=utf-8");}
+function exportCSV(){if(!requireTeacher())return;let rows=[["Truong","Lop","So thu tu","Ma tinh huong","Chu de","Muc do","Lua chon","An toan","Thoi gian"],...attempts.map(a=>[a.school||"",a.cls||"",a.stt||"",a.id,CATS[a.category].name,a.level,a.choice+1,a.correct?"Co":"Khong",a.at])];let csv=rows.map(r=>r.map(v=>'"'+String(v??"").replaceAll('"','""')+'"').join(",")).join("\n");download("du_lieu_luyen_tap_em_biet_bao_ve_minh.csv","\ufeff"+csv,"text/csv;charset=utf-8");}
 function importJSON(event){if(!requireTeacher())return;let f=event.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let d=JSON.parse(r.result),k=x=>JSON.stringify(x),seenA=new Set(attempts.map(k)),seenB=new Set(assessments.map(k)),na=0,nb=0;(d.attempts||[]).forEach(a=>{if(!seenA.has(k(a))){attempts.push(a);seenA.add(k(a));na++;}});(d.assessments||[]).forEach(a=>{if(!seenB.has(k(a))){assessments.push(a);seenB.add(k(a));nb++;}});persist();teacherFilter();toast(`Đã nhập ${na} lượt làm, ${nb} phiếu đánh giá.`);}catch(e){toast("File sao lưu không đúng định dạng.");}event.target.value="";};r.readAsText(f,"utf-8");}
 function exportJSON(){if(!requireTeacher())return;download("sao_luu_em_biet_bao_ve_minh.json",JSON.stringify({attempts,assessments,exportedAt:new Date().toISOString()},null,2),"application/json");}
 function initImageManager(){
@@ -378,7 +420,7 @@ async function uploadSelectedImage(event){
 async function restoreDefaultImage(){if(!requireTeacher())return;let t=currentImageTarget();await removeImage(t.key);await refreshImageTarget();renderTopics();if(currentScenario&&t.type==="scenario"&&currentScenario.id===t.id)setScenarioImage(currentScenario);toast("Đã khôi phục ảnh mặc định/thư mục.");}
 async function init(){
  imageDB=await openImageDB();await loadImageCache();
- renderTopics();updateScenarioCount();updateCounts();initImageManager();
+ renderTopics();updateScenarioCount();updateCounts();initImageManager();initStudentInfo();
  $("teacherCategory").innerHTML='<option value="all">Tất cả chủ đề</option>'+Object.entries(CATS).map(([k,v])=>`<option value="${k}">${v.name}</option>`).join("");
  teacherFilter();
 }
